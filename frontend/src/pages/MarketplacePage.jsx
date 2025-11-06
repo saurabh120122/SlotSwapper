@@ -2,32 +2,33 @@ import React, { useState, useEffect } from 'react';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
 
-// Simple styling
-const eventCardStyle = {
-  padding: '1rem',
-  border: '1px solid #ccc',
-  borderRadius: '8px',
-  margin: '0.5rem 0',
-};
+// --- MUI Imports ---
+import { 
+  Box, 
+  Typography, 
+  Card, 
+  CardContent, 
+  CardActions, 
+  Button, 
+  Modal, 
+  Select, 
+  MenuItem, 
+  FormControl, 
+  InputLabel, 
+  CircularProgress 
+} from '@mui/material';
+
+// --- Style for the MUI Modal ---
 const modalStyle = {
-  position: 'fixed',
+  position: 'absolute',
   top: '50%',
   left: '50%',
   transform: 'translate(-50%, -50%)',
-  background: 'white',
-  padding: '2rem',
-  border: '1px solid #ccc',
-  borderRadius: '8px',
-  zIndex: 100,
-};
-const overlayStyle = {
-  position: 'fixed',
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  background: 'rgba(0,0,0,0.5)',
-  zIndex: 99,
+  width: 400,
+  bgcolor: 'background.paper',
+  border: '2px solid #000',
+  boxShadow: 24,
+  p: 4, // 'p' is padding
 };
 
 const MarketplacePage = () => {
@@ -35,21 +36,19 @@ const MarketplacePage = () => {
   const [mySwappableSlots, setMySwappableSlots] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  // State for the swap modal
   const [showModal, setShowModal] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState(null); // The slot I WANT
   const [myOfferingSlotId, setMyOfferingSlotId] = useState(''); // The slot I'M OFFERING
 
-  // --- 1. Fetch data on load ---
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Get all slots from OTHER users
-      const swappableRes = await api.get('/swappable-slots'); // GET /api/swappable-slots
-      setSwappableSlots(swappableRes.data.data);
+      const [swappableRes, myEventsRes] = await Promise.all([
+        api.get('/swappable-slots'),
+        api.get('/events')
+      ]);
       
-      // Get MY events to find which ones I can offer
-      const myEventsRes = await api.get('/events');
+      setSwappableSlots(swappableRes.data.data);
       setMySwappableSlots(
         myEventsRes.data.data.filter(event => event.status === 'SWAPPABLE')
       );
@@ -64,17 +63,17 @@ const MarketplacePage = () => {
     fetchData();
   }, []);
 
-  // --- 2. Handle opening the modal ---
   const handleRequestClick = (slot) => {
     if (mySwappableSlots.length === 0) {
       return toast.error("You have no swappable slots to offer!");
     }
-    setSelectedSlot(slot); // Set the slot I want
-    setMyOfferingSlotId(mySwappableSlots[0]._id); // Default to my first swappable slot
+    setSelectedSlot(slot);
+    setMyOfferingSlotId(mySwappableSlots[0]._id);
     setShowModal(true);
   };
 
-  // --- 3. Handle submitting the swap request ---
+  const handleCloseModal = () => setShowModal(false);
+
   const handleSwapSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -83,59 +82,79 @@ const MarketplacePage = () => {
         theirSlotId: selectedSlot._id,
       });
       toast.success('Swap request sent!');
-      setShowModal(false);
-      setSelectedSlot(null);
-      // Refresh all data since my slot is now PENDING
-      fetchData(); 
+      handleCloseModal();
+      fetchData(); // Refresh data
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to send request');
     }
   };
 
-  if (loading) return <div>Loading available slots...</div>;
+  if (loading) return <CircularProgress sx={{ display: 'block', margin: 'auto' }} />;
 
   return (
-    <div style={{ padding: '1rem' }}>
-      <h2>Marketplace</h2>
-      {swappableSlots.length === 0 && <p>No swappable slots available right now.</p>}
+    <Box>
+      <Typography variant="h4" component="h1" gutterBottom>
+        Marketplace
+      </Typography>
+      {swappableSlots.length === 0 && <Typography>No swappable slots available right now.</Typography>}
       
-      {swappableSlots.map(slot => (
-        <div key={slot._id} style={eventCardStyle}>
-          <h4>{slot.title}</h4>
-          <p>By: {slot.owner.name}</p>
-          <p>{new Date(slot.startTime).toLocaleString()} - {new Date(slot.endTime).toLocaleString()}</p>
-          <button onClick={() => handleRequestClick(slot)}>
-            Request Swap
-          </button>
-        </div>
-      ))}
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {swappableSlots.map(slot => (
+          <Card key={slot._id} variant="outlined">
+            <CardContent>
+              <Typography variant="h6">{slot.title}</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Offered by: {slot.owner.name}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {new Date(slot.startTime).toLocaleString()} - {new Date(slot.endTime).toLocaleString()}
+              </Typography>
+            </CardContent>
+            <CardActions>
+              <Button size="small" variant="contained" onClick={() => handleRequestClick(slot)}>
+                Request Swap
+              </Button>
+            </CardActions>
+          </Card>
+        ))}
+      </Box>
 
-      {/* ----- Swap Request Modal ----- */}
-      {showModal && (
-        <>
-          <div style={overlayStyle} onClick={() => setShowModal(false)} />
-          <div style={modalStyle}>
-            <h3>Request Swap</h3>
-            <p>You want: <strong>{selectedSlot.title}</strong></p>
-            <form onSubmit={handleSwapSubmit}>
-              <label>Offer your slot:</label>
-              <select
-                value={myOfferingSlotId}
-                onChange={(e) => setMyOfferingSlotId(e.target.value)}
-              >
-                {mySwappableSlots.map(mySlot => (
-                  <option key={mySlot._id} value={mySlot._id}>
-                    {mySlot.title} ({new Date(mySlot.startTime).toLocaleDateString()})
-                  </option>
-                ))}
-              </select>
-              <button type="submit" style={{ marginLeft: '10px' }}>Send Request</button>
-              <button type="button" onClick={() => setShowModal(false)}>Cancel</button>
-            </form>
-          </div>
-        </>
-      )}
-    </div>
+      {/* --- The New MUI Modal --- */}
+      <Modal
+        open={showModal}
+        onClose={handleCloseModal}
+      >
+        <Box sx={modalStyle} component="form" onSubmit={handleSwapSubmit}>
+          <Typography variant="h6" component="h2">
+            Request Swap
+          </Typography>
+          <Typography sx={{ mt: 2 }}>
+            You want: <strong>{selectedSlot?.title}</strong>
+          </Typography>
+          
+          <FormControl fullWidth sx={{ mt: 2 }}>
+            <InputLabel id="offer-slot-label">Offer Your Slot</InputLabel>
+            <Select
+              labelId="offer-slot-label"
+              value={myOfferingSlotId}
+              label="Offer Your Slot"
+              onChange={(e) => setMyOfferingSlotId(e.target.value)}
+            >
+              {mySwappableSlots.map(mySlot => (
+                <MenuItem key={mySlot._id} value={mySlot._id}>
+                  {mySlot.title} ({new Date(mySlot.startTime).toLocaleDateString()})
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          
+          <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+            <Button onClick={handleCloseModal}>Cancel</Button>
+            <Button type="submit" variant="contained">Send Request</Button>
+          </Box>
+        </Box>
+      </Modal>
+    </Box>
   );
 };
 

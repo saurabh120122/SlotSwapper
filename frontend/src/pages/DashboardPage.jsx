@@ -2,40 +2,29 @@ import React, { useState, useEffect } from 'react';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
 
-// Simple styling
-const layoutStyle = {
-  display: 'grid',
-  gridTemplateColumns: '1fr 1fr',
-  gap: '2rem',
-  padding: '1rem',
-};
-const eventListStyle = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '10px',
-};
-const eventCardStyle = {
-  padding: '1rem',
-  border: '1px solid #ccc',
-  borderRadius: '8px',
-};
-const formStyle = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '10px',
-  padding: '1rem',
-  border: '1px solid #eee',
-  borderRadius: '8px',
-};
+// --- MUI Imports ---
+import { 
+  Box, 
+  TextField, 
+  Button, 
+  Typography, 
+  Card, 
+  CardContent, 
+  CardActions,
+  Grid,
+  CircularProgress
+} from '@mui/material';
+import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 
 const DashboardPage = () => {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [newEvent, setNewEvent] = useState({
-    title: '',
-    startTime: '',
-    endTime: '',
-  });
+  
+  // State for the new event form
+  const [title, setTitle] = useState('');
+  const [startTime, setStartTime] = useState(null); // Use null for date pickers
+  const [endTime, setEndTime] = useState(null); // Use null for date pickers
+  const [isCreating, setIsCreating] = useState(false);
 
   // --- 1. Fetch all user events on page load ---
   const fetchEvents = async () => {
@@ -56,18 +45,31 @@ const DashboardPage = () => {
   // --- 2. Handle new event creation ---
   const handleCreateEvent = async (e) => {
     e.preventDefault();
+    if (!title || !startTime || !endTime) {
+      return toast.error("All fields are required");
+    }
+    if (new Date(endTime) <= new Date(startTime)) {
+      return toast.error("End time must be after start time");
+    }
+
+    setIsCreating(true);
     try {
+      const newEvent = { title, startTime, endTime };
       const response = await api.post('/events', newEvent); // POST /api/events
+      
       setEvents([...events, response.data.data]); // Add new event to list
-      setNewEvent({ title: '', startTime: '', endTime: '' }); // Reset form
+      
+      // Reset form
+      setTitle('');
+      setStartTime(null);
+      setEndTime(null);
+      
       toast.success('Event created!');
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to create event');
+    } finally {
+      setIsCreating(false);
     }
-  };
-  
-  const handleFormChange = (e) => {
-    setNewEvent({ ...newEvent, [e.target.name]: e.target.value });
   };
 
   // --- 3. Handle changing an event's status ---
@@ -84,69 +86,83 @@ const DashboardPage = () => {
     }
   };
 
-  if (loading) return <div>Loading your calendar...</div>;
+  if (loading) return <CircularProgress sx={{ display: 'block', margin: 'auto', mt: 4 }} />;
 
   return (
-    <div style={layoutStyle}>
+    <Grid container spacing={4}>
       {/* ----- Column 1: Create Event ----- */}
-      <div>
-        <h2>Create New Event</h2>
-        <form onSubmit={handleCreateEvent} style={formStyle}>
-          <input
-            type="text"
-            name="title"
-            placeholder="Event Title"
-            value={newEvent.title}
-            onChange={handleFormChange}
+      <Grid item xs={12} md={4}>
+        <Typography component="h2" variant="h5" gutterBottom>
+          Create New Event
+        </Typography>
+        <Box component="form" onSubmit={handleCreateEvent} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <TextField
+            label="Event Title"
+            variant="outlined"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            disabled={isCreating}
           />
-          <label>Start Time</label>
-          <input
-            type="datetime-local"
-            name="startTime"
-            value={newEvent.startTime}
-            onChange={handleFormChange}
+          <DateTimePicker
+            label="Start Time"
+            value={startTime}
+            onChange={(newValue) => setStartTime(newValue)}
+            renderInput={(params) => <TextField {...params} />}
+            disabled={isCreating}
           />
-          <label>End Time</label>
-          <input
-            type="datetime-local"
-            name="endTime"
-            value={newEvent.endTime}
-            onChange={handleFormChange}
+          <DateTimePicker
+            label="End Time"
+            value={endTime}
+            onChange={(newValue) => setEndTime(newValue)}
+            renderInput={(params) => <TextField {...params} />}
+            disabled={isCreating}
           />
-          <button type="submit">Create Event</button>
-        </form>
-      </div>
+          <Button type="submit" variant="contained" disabled={isCreating}>
+            {isCreating ? <CircularProgress size={24} /> : 'Create Event'}
+          </Button>
+        </Box>
+      </Grid>
 
       {/* ----- Column 2: My Events ----- */}
-      <div>
-        <h2>My Events</h2>
-        <div style={eventListStyle}>
-          {events.length === 0 && <p>You have no events.</p>}
+      <Grid item xs={12} md={8}>
+        <Typography component="h2" variant="h5" gutterBottom>
+          My Events
+        </Typography>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {events.length === 0 && <Typography>You have no events. Create one to get started!</Typography>}
           {events.map(event => (
-            <div key={event._id} style={eventCardStyle}>
-              <h4>{event.title}</h4>
-              <p>{new Date(event.startTime).toLocaleString()} - {new Date(event.endTime).toLocaleString()}</p>
-              <p><strong>Status: {event.status}</strong></p>
-              
-              {/* Logic for the status change buttons */}
-              {event.status === 'BUSY' && (
-                <button onClick={() => handleStatusChange(event._id, 'SWAPPABLE')}>
-                  Make Swappable
-                </button>
-              )}
-              {event.status === 'SWAPPABLE' && (
-                <button onClick={() => handleStatusChange(event._id, 'BUSY')}>
-                  Make Busy
-                </button>
-              )}
-              {event.status === 'SWAP_PENDING' && (
-                <button disabled>In a pending swap...</button>
-              )}
-            </div>
+            <Card key={event._id} variant="outlined">
+              <CardContent>
+                <Typography variant="h6">{event.title}</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {new Date(event.startTime).toLocaleString()} - {new Date(event.endTime).toLocaleString()}
+                </Typography>
+                <Typography variant="body1" sx={{ mt: 1, fontWeight: 'bold' }}>
+                  Status: {event.status}
+                </Typography>
+              </CardContent>
+              <CardActions>
+                {event.status === 'BUSY' && (
+                  <Button size="small" variant="outlined" onClick={() => handleStatusChange(event._id, 'SWAPPABLE')}>
+                    Make Swappable
+                  </Button>
+                )}
+                {event.status === 'SWAPPABLE' && (
+                  <Button size="small" variant="outlined" onClick={() => handleStatusChange(event._id, 'BUSY')}>
+                    Make Busy
+                  </Button>
+                )}
+                {event.status === 'SWAP_PENDING' && (
+                  <Button size="small" variant="outlined" disabled>
+                    In a pending swap...
+                  </Button>
+                )}
+              </CardActions>
+            </Card>
           ))}
-        </div>
-      </div>
-    </div>
+        </Box>
+      </Grid>
+    </Grid>
   );
 };
 
