@@ -1,25 +1,32 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
-// 1. Create the context
 const AuthContext = createContext();
 
-// 2. Create the provider component
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
+  const [loading, setLoading] = useState(true); // 1. Add loading state
 
-  // On app load, check localStorage for existing session
   useEffect(() => {
-    const storedToken = localStorage.getItem('token');
-    const storedUser = localStorage.getItem('user');
-    
-    if (storedToken && storedUser) {
-      setToken(storedToken);
-      setUser(JSON.parse(storedUser));
+    try {
+      const storedToken = localStorage.getItem('token');
+      const storedUser = localStorage.getItem('user');
+      
+      if (storedToken && storedUser) {
+        setToken(storedToken);
+        setUser(JSON.parse(storedUser));
+      }
+    } catch (error) {
+      console.error("Failed to parse stored user", error);
+      // Ensure we clear bad data
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+    } finally {
+      // 2. We're done checking, no matter what
+      setLoading(false); 
     }
   }, []);
 
-  // Login function
   const login = (userData, accessToken) => {
     setUser(userData);
     setToken(accessToken);
@@ -27,7 +34,6 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem('token', accessToken);
   };
 
-  // Logout function
   const logout = () => {
     setUser(null);
     setToken(null);
@@ -35,19 +41,23 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('token');
   };
 
-  // The value to be passed to consuming components
   const value = {
     user,
     token,
+    loading, // 3. Expose loading state
     isLoggedIn: !!token,
     login,
     logout,
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  // 4. Don't render children until we're done loading
+  return (
+    <AuthContext.Provider value={value}>
+      {!loading && children}
+    </AuthContext.Provider>
+  );
 };
 
-// 3. Create a custom hook for easy access
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {

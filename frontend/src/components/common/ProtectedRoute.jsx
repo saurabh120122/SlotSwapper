@@ -2,18 +2,29 @@ import React from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 
-// This is the "bouncer" for your private pages
+// --- Import a loading spinner ---
+import { Box, CircularProgress } from '@mui/material';
+
 const ProtectedRoute = () => {
-  const { isLoggedIn } = useAuth();
+  // 1. Get both loading and isLoggedIn
+  const { isLoggedIn, loading } = useAuth();
   const location = useLocation();
 
+  // 2. If we're still checking, show a spinner
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  // 3. If we're done loading and NOT logged in, redirect
   if (!isLoggedIn) {
-    // Redirect them to the /login page, but save the location they were
-    // trying to go to so we can send them there after they login
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // If they are logged in, render the child route (e.g., Dashboard)
+  // 4. If we're done loading and ARE logged in, show the page
   return <Outlet />;
 };
 
